@@ -1,7 +1,9 @@
 package ratelimiter
 
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
+import com.typesafe.scalalogging.LazyLogging
 import lock.LockManager
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -16,13 +18,12 @@ class RateLimiter(
                    lockManager: LockManager,
                    permits: RedisPermits,
                    redisPermitsTemplate: RedisPermitsTemplate
-                 ) {
+                 ) extends LazyLogging {
 
   def acquire(permits: Int): Future[Double] = {
     for {
       microsToWait <- reserve(permits);
       _ <- Future {
-        println(microsToWait)
         TimeUnit.MILLISECONDS.sleep(microsToWait)
       }
     } yield {
@@ -32,22 +33,22 @@ class RateLimiter(
   }
 
 
-  def reSync(): Future[(RedisPermits,Long)] = {
+  def reSync(): Future[(RedisPermits, Long)] = {
     lockManager.now().flatMap {
       now =>
-        println("get now")
+        logger.info(s"get redis now :${now}")
         redisPermitsTemplate.queryPermits(name).flatMap {
           permits =>
-            println("queried permit")
+            logger.info(s"queried permits, permits : ${permits}")
             if (permits.nextFreeTicketMillis < now) {
               val newPermits = (now - permits.nextFreeTicketMillis) / permits.intervalMillis
               val storedPermits = math.min(permits.maxPermits, newPermits + permits.storePermits)
               Future {
-                (permits.copy(storePermits = storedPermits, nextFreeTicketMillis = now),now)
+                (permits.copy(storePermits = storedPermits, nextFreeTicketMillis = now), now)
               }
             } else {
               Future {
-                (permits,now)
+                (permits, now)
               }
             }
         }
@@ -59,8 +60,8 @@ class RateLimiter(
   def reserveAndGetWaitLength(requiredPermits: Int): Future[Long] = {
     reSync().flatMap {
       tuple =>
-      val  (permits:RedisPermits,now:Long) = tuple
-        println("get permits")
+        val (permits: RedisPermits, now: Long) = tuple
+        logger.info(s"get permits , permits ${permits}")
         val tobeSpend = Math.min(permits.storePermits, requiredPermits)
         val freshPermits = requiredPermits - tobeSpend
         val waitTime = freshPermits * permits.intervalMillis
@@ -77,14 +78,14 @@ class RateLimiter(
   }
 
   def checkPermits(): Future[RedisPermits] = {
-    println("check permits")
+    logger.info(s"check permits : ${permits}")
     redisPermitsTemplate.exists(permits).flatMap {
       case false =>
-        println("create permits")
+        logger.info(s"permit not exists , create permits ${permits}")
         redisPermitsTemplate.insertPermits(permits).flatMap {
           case true =>
             Future {
-              println("insert permits")
+              logger.info(s"insert permits :${permits}")
               permits
             }
         }
@@ -99,7 +100,7 @@ class RateLimiter(
   }
 
   def reserve(permits: Int): Future[Long] = {
-    lockManager.lock(name + ":lock", "value").flatMap {
+    lockManager.lock(name + ":lock", UUID.randomUUID().toString).flatMap {
       case Some(lock) =>
         for {
           _ <- checkPermits();
@@ -120,6 +121,3 @@ class RateLimiter(
 
 }
 
-object RateLimiter {
-
-}
