@@ -1,5 +1,7 @@
 package ratelimiter
 
+import java.util.UUID
+
 import org.scalatest._
 
 
@@ -9,7 +11,7 @@ import org.scalatest._
  */
 class RedisPermitsTemplateSpec extends AsyncFlatSpec {
 
-  "RedisPermitsTemplate" should "insert a permits" in {
+  "RedisPermitsTemplate" should "insert a permit" in {
     val template = new RedisPermitsTemplate()
     val testPermits = RedisPermits("test", 1, 0, 500, 0)
     for {
@@ -18,11 +20,11 @@ class RedisPermitsTemplateSpec extends AsyncFlatSpec {
   }
 
 
-  "RedisPermitsTemplate" should "get a permits" in {
+  "RedisPermitsTemplate" should "get a permit" in {
     val template = new RedisPermitsTemplate()
     val testPermits = RedisPermits("test", 1, 0, 500, 0)
     for {
-      status <- template.insertPermits(testPermits)
+      _ <- template.insertPermits(testPermits)
       result <- template.queryPermits(testPermits.name)
     } yield {
       assert(result == testPermits)

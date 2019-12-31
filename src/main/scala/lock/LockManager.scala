@@ -8,7 +8,7 @@ import scala.concurrent.Future
  */
 trait LockManager {
   val DEFAULT_EXPIRY_TIME_MILLIS: Long = 60 * 1000L
-  val DEFAULT_SAFE_TIME:Long= 10000
+  val DEFAULT_SAFE_TIME: Long = 10000
 
 
   def tryLock(key: String, value: String, expireTimeMillis: Long = DEFAULT_EXPIRY_TIME_MILLIS): Future[Option[Lock]]
@@ -21,4 +21,6 @@ trait LockManager {
   def unLock(key: String, value: String): Future[Boolean]
 
   def unLock(lock: Lock): Future[Boolean]
+
+  def now(): Future[Long]
 }

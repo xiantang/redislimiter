@@ -19,7 +19,7 @@ case class RedisPermits(
 
 }
 object RedisPermits extends LazyLogging {
-  implicit val write = new Writes[RedisPermits] {
+  implicit val write: Writes[RedisPermits] = new Writes[RedisPermits] {
     override def writes(o: RedisPermits): JsValue = Json.obj(
       "name" -> o.name,
       "maxPermits" -> o.maxPermits,

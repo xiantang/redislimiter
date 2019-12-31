@@ -19,6 +19,10 @@ class RedisPermitsTemplate {
   private val redisClient = RedisClientPool(Seq(RedisServer("localhost", 6379)))
 
 
+  def exists(permits: RedisPermits):Future[Boolean] = {
+    redisClient.exists(permits.name)
+  }
+
   def insertPermits(permits: RedisPermits): Future[Boolean] = {
     val json = Json.toJson(permits).toString()
     redisClient.set(permits.name, json)

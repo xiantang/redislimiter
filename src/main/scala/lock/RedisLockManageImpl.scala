@@ -5,24 +5,24 @@ import java.util.concurrent.TimeUnit
 
 import akka.actor.ActorSystem
 import com.typesafe.scalalogging.LazyLogging
-import redis.protocol.Integer
+import redis.protocol.{Bulk, Integer}
 import redis.{RedisClientPool, RedisServer}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+
 /**
  * @author zhujingdi
  * @since 2019/12/29
  */
-class RedisLockManageImpl extends LockManager with LazyLogging{
-
+class RedisLockManageImpl extends LockManager with LazyLogging {
 
 
   implicit val akkaSystem: ActorSystem = akka.actor.ActorSystem()
   private val redisClient = RedisClientPool(Seq(RedisServer("localhost", 6379)))
   private val WAIT_TIME = 500
   private val RELEASE_SCRIPT = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
-
+  private val TIME_SCRIPT = "return redis.call('TIME')[1]"
 
   override def tryLock(key: String, value: String, expireTimeMillis: Long = DEFAULT_EXPIRY_TIME_MILLIS): Future[Option[Lock]] = {
     val lock = Lock(key, value)
@@ -44,7 +44,7 @@ class RedisLockManageImpl extends LockManager with LazyLogging{
                     safeTime: Long = DEFAULT_SAFE_TIME): Future[Option[Lock]] = {
     def loop(currentWait: Long): Future[Option[Lock]] = {
       if (currentWait > DEFAULT_SAFE_TIME) {
-        logger.info(s"failed get lock key ${key} value ${value}")
+        println(s"failed get lock key ${key} value ${value}")
         Future {
           None
         }
@@ -52,7 +52,7 @@ class RedisLockManageImpl extends LockManager with LazyLogging{
       else {
         tryLock(key, value, expireTimeMillis).flatMap {
           case Some(lock) =>
-            logger.info(s"success get the lock key ${key} value ${value}")
+            println(s"success get the lock key ${key} value ${value}")
             Future {
               Some(lock)
             }
@@ -79,12 +79,20 @@ class RedisLockManageImpl extends LockManager with LazyLogging{
 
     result.map {
       case s: Integer if s.toBoolean =>
-        logger.info(s"success unlock key ${lock.key} value ${lock.value}")
+        println(s"success unlock key ${lock.key} value ${lock.value}")
 
         true
       case _ =>
-        logger.info(s"failed unlock key ${lock.key} value ${lock.value}")
+        println(s"failed unlock key ${lock.key} value ${lock.value}")
         false
+    }
+  }
+
+  override def now(): Future[Long] = {
+    redisClient.eval(TIME_SCRIPT,Seq("0"),Seq("0")).map{
+      case b:Bulk  =>
+        val result = b.toString()
+        result.toLong
     }
   }
 

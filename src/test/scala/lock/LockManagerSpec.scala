@@ -21,13 +21,13 @@ class LockManagerSpec extends AsyncFlatSpec {
     for (
       some <- lock
     ) yield {
-      assert(some == Some(Lock(key, value)))
+      assert(some.contains(Lock(key, value)))
     }
 
     for (
-      lock <- lock
+      lock <- lockManager.tryLock(key, value)
     ) yield {
-      assert(lock == Some(None))
+      assert(lock.isEmpty)
     }
   }
 
@@ -38,10 +38,10 @@ class LockManagerSpec extends AsyncFlatSpec {
     val key = UUID.randomUUID().toString
     val value = UUID.randomUUID().toString
     for {
-      lock <- lockManager.tryLock(key, value);
+      _ <- lockManager.tryLock(key, value);
       lock2 <- lockManager.lock(key, value)
     } yield {
-      assert(lock2 == None)
+      assert(lock2.isEmpty)
     }
   }
 
@@ -56,7 +56,18 @@ class LockManagerSpec extends AsyncFlatSpec {
       lockAgain <- lockManager.tryLock(key, value)
 
     ) yield {
-      assert(lockAgain == Some(Lock(key, value)))
+      assert(lockAgain.contains(Lock(key, value)))
+    }
+  }
+
+
+  "now " should "be a long" in {
+    val lockManager = new RedisLockManageImpl()
+    for{
+      now <- lockManager.now()
+    }yield {
+      println(now)
+      assert(now > 1000)
     }
   }
 }
