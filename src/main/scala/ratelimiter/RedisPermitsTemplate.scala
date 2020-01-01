@@ -1,11 +1,10 @@
 package ratelimiter
 
-import akka.actor.ActorSystem
 import play.api.libs.json.{JsSuccess, JsValue, Json}
-import redis.{RedisClientPool, RedisServer}
+import redis.RedisServer
 
-import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
 
 /**

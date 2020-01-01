@@ -14,7 +14,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 class RateLimiterFactorySpec extends FlatSpec {
   "RateLimiterFactory " should "create a limitRater get 2 permit per second" in {
     val key = UUID.randomUUID().toString
-    val limiter = RateLimiterFactory.newRateLimiter(key, 7)
+    val limiter = RateLimiterFactory.newRateLimiter(key, permitsPerSecond = 7,maxPermits = 1)
     val template = new RedisPermitsTemplate(RedisServer("localhost", 6379))
     for {
       result <- template.queryPermits(key)
