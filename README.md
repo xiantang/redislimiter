@@ -1,4 +1,4 @@
-# quickly start
+# Quickstart
 
 invoke the api 7 times per second.
 ```scala
