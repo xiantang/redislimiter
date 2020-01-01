@@ -21,6 +21,7 @@ class RedisLockManageImpl(redisServer: RedisServer) extends
   with LazyLogging {
 
   private val RELEASE_SCRIPT = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
+  private val TIME_SCRIPT = "local a=redis.call('TIME') ;return a[1]*1000+a[2]/1000"
 
   override def tryLock(key: String, expireTimeMillis: Long = DEFAULT_EXPIRY_TIME_MILLIS): Future[Option[Lock]] = {
     val uuid = UUID.randomUUID().toString
@@ -80,7 +81,13 @@ class RedisLockManageImpl(redisServer: RedisServer) extends
     }
   }
 
-
+  override def now(): Future[Long] = {
+    redisClient.eval(TIME_SCRIPT, Seq("0")).map {
+      case i: Integer =>
+        val result = i.toLong
+        result
+    }
+  }
 
 
 }
