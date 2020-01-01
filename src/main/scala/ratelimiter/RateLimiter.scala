@@ -1,6 +1,5 @@
 package ratelimiter
 
-import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 import com.typesafe.scalalogging.LazyLogging
@@ -59,8 +58,8 @@ class RateLimiter(
 
   def reserveAndGetWaitLength(requiredPermits: Int): Future[Long] = {
     reSync().flatMap {
-      tuple =>
-        val (permits: RedisPermits, now: Long) = tuple
+      result =>
+        val (permits: RedisPermits, now: Long) = result
         logger.info(s"get permits , permits ${permits}")
         val tobeSpend = Math.min(permits.storePermits, requiredPermits)
         val freshPermits = requiredPermits - tobeSpend
@@ -73,6 +72,8 @@ class RateLimiter(
             Future {
               nextFreeTicketMillis - now
             }
+          case false =>
+            throw new Exception("can not insert permits to redis, please check your connection")
         }
     }
   }
@@ -100,7 +101,8 @@ class RateLimiter(
   }
 
   def reserve(permits: Int): Future[Long] = {
-    lockManager.lock(name + ":lock", UUID.randomUUID().toString).flatMap {
+    val lockName = name + ":lock"
+    lockManager.lock(lockName).flatMap {
       case Some(lock) =>
         for {
           _ <- checkPermits();
@@ -110,12 +112,8 @@ class RateLimiter(
           waitLength
         }
       case None =>
-        // TODO Failed
-        Future {
-          1000L
-        }
+        throw new Exception(s"can not  get the lock , name :${lockName}")
     }
-
   }
 
 

@@ -1,8 +1,9 @@
 package ratelimiter
 
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
-import lock.RedisLockManageImpl
+import com.typesafe.scalalogging.LazyLogging
 import org.scalatest._
 
 import scala.concurrent.Future
@@ -11,42 +12,36 @@ import scala.concurrent.Future
  * @author zhujingdi
  * @since 2019/12/30
  */
-class RateLimiterSpec extends AsyncFlatSpec {
+class RateLimiterSpec extends AsyncFlatSpec with LazyLogging {
 
-  "RateLimiter" should "do request ever 1 second" in {
-    val lockManager = new RedisLockManageImpl()
-    val limiter = new RateLimiter("test", lockManager, null,
-      new RedisPermitsTemplate())
+  "RateLimiter" should "do request every 1 second" in {
+    val rateLimiter = RateLimiterFactory.newRateLimiter(UUID.randomUUID().toString, 1)
     for {
-      _ <- doRequest(limiter)
-      _ <- doRequest(limiter)
-      _ <- doRequest(limiter)
+      _ <- doRequest(rateLimiter)
+      _ <- doRequest(rateLimiter)
+      _ <- doRequest(rateLimiter)
     } yield {
       assert(true)
     }
   }
 
   "RateLimiter" should "do async request ever 1 second" in {
-    val lockManager = new RedisLockManageImpl()
-    val limiter = new RateLimiter("test", lockManager, null,
-      new RedisPermitsTemplate())
-    doRequest(limiter)
-    doRequest(limiter)
-    doRequest(limiter)
+    val rateLimiter = RateLimiterFactory.newRateLimiter(UUID.randomUUID().toString, 1)
+
+    doRequest(rateLimiter)
+    doRequest(rateLimiter)
+    doRequest(rateLimiter)
     TimeUnit.SECONDS.sleep(6)
     assert(true)
 
   }
 
-  def doRequest(limiter: RateLimiter): Future[Long] = {
+  def doRequest(limiter: RateLimiter): Future[_] = {
     limiter.acquire(1).flatMap {
       x => {
-        println(x)
-        Future {
-          1000L
-        }
+        logger.info(x +"")
+        Future {}
       }
-
     }
   }
 }

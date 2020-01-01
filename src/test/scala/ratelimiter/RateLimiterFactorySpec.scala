@@ -1,11 +1,10 @@
 package ratelimiter
 
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 
 import org.scalatest._
+import redis.RedisServer
 
-import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
@@ -14,10 +13,11 @@ import scala.concurrent.ExecutionContext.Implicits.global
  */
 class RateLimiterFactorySpec extends FlatSpec {
   "RateLimiterFactory " should "create a limitRater get 2 permit per second" in {
-    val limiter = RateLimiterFactory.newRateLimiter("test", 7)
-    val template = new RedisPermitsTemplate()
+    val key = UUID.randomUUID().toString
+    val limiter = RateLimiterFactory.newRateLimiter(key, 7)
+    val template = new RedisPermitsTemplate(RedisServer("localhost", 6379))
     for {
-      result <- template.queryPermits("test")
+      result <- template.queryPermits(key)
     } yield {
       assert(result != null)
     }

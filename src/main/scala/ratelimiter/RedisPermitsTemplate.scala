@@ -12,14 +12,10 @@ import scala.concurrent.ExecutionContext.Implicits.global
  * @author zhujingdi
  * @since 2019/12/30
  */
-class RedisPermitsTemplate {
+class RedisPermitsTemplate(redisServer: RedisServer) extends
+  RedisClientBase(redisServer) {
 
-
-  implicit val akkaSystem: ActorSystem = akka.actor.ActorSystem()
-  private val redisClient = RedisClientPool(Seq(RedisServer("localhost", 6379)))
-
-
-  def exists(permits: RedisPermits):Future[Boolean] = {
+  def exists(permits: RedisPermits): Future[Boolean] = {
     redisClient.exists(permits.name)
   }
 
@@ -30,12 +26,14 @@ class RedisPermitsTemplate {
 
 
   def queryPermits(name: String): Future[RedisPermits] = {
-    redisClient.get[String](name).flatMap{
+    redisClient.get[String](name).flatMap {
       case Some(result) =>
-        val jsonValue :JsValue= Json.parse(result)
+        val jsonValue: JsValue = Json.parse(result)
         val jsonPermits = jsonValue.validate[RedisPermits]
         jsonPermits match {
-          case JsSuccess(permits, _) => Future{permits}
+          case JsSuccess(permits, _) => Future {
+            permits
+          }
         }
     }
   }

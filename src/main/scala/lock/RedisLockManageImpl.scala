@@ -3,10 +3,10 @@ package lock
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
-import akka.actor.ActorSystem
 import com.typesafe.scalalogging.LazyLogging
-import redis.protocol.{Bulk, Integer}
-import redis.{RedisClientPool, RedisServer}
+import ratelimiter.RedisClientBase
+import redis.RedisServer
+import redis.protocol.Integer
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -15,18 +15,17 @@ import scala.concurrent.Future
  * @author zhujingdi
  * @since 2019/12/29
  */
-class RedisLockManageImpl extends LockManager with LazyLogging {
+class RedisLockManageImpl(redisServer: RedisServer) extends
+  RedisClientBase(redisServer)
+  with LockManager
+  with LazyLogging {
 
-
-  implicit val akkaSystem: ActorSystem = akka.actor.ActorSystem()
-  private val redisClient = RedisClientPool(Seq(RedisServer("localhost", 6379)))
-  private val WAIT_TIME = 10
   private val RELEASE_SCRIPT = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
-  private val TIME_SCRIPT = "local a=redis.call('TIME') ;return a[1]*1000+a[2]/1000"
 
-  override def tryLock(key: String, value: String, expireTimeMillis: Long = DEFAULT_EXPIRY_TIME_MILLIS): Future[Option[Lock]] = {
-    val lock = Lock(key, value)
-    redisClient.set(key, value, pxMilliseconds = Some(DEFAULT_EXPIRY_TIME_MILLIS), NX = true)
+  override def tryLock(key: String, expireTimeMillis: Long = DEFAULT_EXPIRY_TIME_MILLIS): Future[Option[Lock]] = {
+    val uuid = UUID.randomUUID().toString
+    val lock = Lock(key, uuid)
+    redisClient.set(key, uuid, pxMilliseconds = Some(DEFAULT_EXPIRY_TIME_MILLIS), NX = true)
       .map {
         case true =>
           Some(lock)
@@ -35,33 +34,30 @@ class RedisLockManageImpl extends LockManager with LazyLogging {
       }
   }
 
-  override def tryLock(key: String): Future[Option[Lock]] = {
-    val value = UUID.randomUUID().toString
-    tryLock(key, value)
-  }
 
-  override def lock(key: String, value: String, expireTimeMillis: Long = DEFAULT_EXPIRY_TIME_MILLIS,
+  override def lock(key: String, expireTimeMillis: Long = DEFAULT_EXPIRY_TIME_MILLIS,
                     safeTime: Long = DEFAULT_SAFE_TIME): Future[Option[Lock]] = {
+
     def loop(currentWait: Long): Future[Option[Lock]] = {
       if (currentWait > DEFAULT_SAFE_TIME) {
-        logger.error(s"failed get lock key ${key} value ${value}")
+        logger.error(s"failed get lock key ${key}")
         Future {
           None
         }
       }
       else {
-        tryLock(key, value, expireTimeMillis).flatMap {
+        tryLock(key, expireTimeMillis).flatMap {
           case Some(lock) =>
-            logger.info(s"success get the lock key ${key} value ${value}")
+            logger.info(s"success get the lock key ${key} uuid ${lock.uuid}")
             Future {
               Some(lock)
             }
           case _ =>
             for {
               _ <- Future {
-                TimeUnit.MILLISECONDS.sleep(WAIT_TIME)
+                TimeUnit.MILLISECONDS.sleep(DEFAULT_WAIT_MILE)
               }
-              lock <- loop(currentWait + WAIT_TIME)
+              lock <- loop(currentWait + DEFAULT_WAIT_MILE)
             } yield lock
         }
       }
@@ -70,31 +66,21 @@ class RedisLockManageImpl extends LockManager with LazyLogging {
     loop(0)
   }
 
-  override def unLock(key: String, value: String): Future[Boolean] = {
-    unLock(Lock(key, value))
-  }
 
   override def unLock(lock: Lock): Future[Boolean] = {
-    val result = redisClient.eval(RELEASE_SCRIPT, Seq(lock.key), Seq(lock.value))
-
+    val result = redisClient.eval(RELEASE_SCRIPT, Seq(lock.key), Seq(lock.uuid))
     result.map {
       case s: Integer if s.toBoolean =>
-        logger.info(s"success unlock key ${lock.key} value ${lock.value}")
+        logger.info(s"success unlock key ${lock.key} uuid ${lock.uuid}")
 
         true
       case _ =>
-        logger.error(s"failed unlock key ${lock.key} value ${lock.value}")
+        logger.error(s"failed unlock key ${lock.key} uuid ${lock.uuid}")
         false
     }
   }
 
-  override def now(): Future[Long] = {
-    redisClient.eval(TIME_SCRIPT, Seq("0")).map {
-      case i: Integer =>
-        val result = i.toLong
-        result
-    }
-  }
+
 
 
 }
